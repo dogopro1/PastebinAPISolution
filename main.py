@@ -3,9 +3,9 @@ import re
 import requests
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
+from datetime import datetime
 
 app = FastAPI()
-
 
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 print("DEBUG: SERPAPI_KEY =", SERPAPI_KEY)
@@ -17,6 +17,12 @@ def root():
         "usage": "Use /search?q=your_search_term to search Pastebin",
         "docs": "Visit /docs for interactive API documentation"
     }
+
+def parse_date(date_str: str) -> datetime:
+    try:
+        return datetime.strptime(date_str, "%b %d, %Y")
+    except:
+        return datetime.min  # Najstarsza możliwa data jako fallback
 
 @app.get("/search")
 def search(q: str = Query(..., min_length=2)):
@@ -47,6 +53,7 @@ def search(q: str = Query(..., min_length=2)):
     for result in data.get("organic_results", []):
         link = result.get("link")
         snippet = result.get("snippet", "")
+        date = result.get("date", "unknown")
 
         try:
             paste_response = requests.get(link, timeout=5)
@@ -57,14 +64,14 @@ def search(q: str = Query(..., min_length=2)):
                 results.append({
                     "link": link,
                     "snippet": match.group(),
-                    "date": result.get("date", "unknown")
+                    "date": date
                 })
         except requests.RequestException:
             continue
 
     sorted_results = sorted(
         results,
-        key=lambda x: x.get("date", ""),
+        key=lambda x: parse_date(x.get("date", "")),
         reverse=True
     )
 
