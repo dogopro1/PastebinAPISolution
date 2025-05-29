@@ -1,22 +1,30 @@
+import os
+import re
+import requests
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-import requests
-import re
 
 app = FastAPI()
 
-SERPAPI_KEY = "4e24077e22cbc98acce5c745afefbbf492a4ccab07e3d9f204877d3a5de99c9a"
+
+SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
 @app.get("/")
 def root():
     return {
-        "message": "Pastebin Search API", 
+        "message": "Pastebin Search API",
         "usage": "Use /search?q=your_search_term to search Pastebin",
         "docs": "Visit /docs for interactive API documentation"
     }
 
 @app.get("/search")
 def search(q: str = Query(..., min_length=2)):
+    if not SERPAPI_KEY:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Brak klucza API SerpAPI. Ustaw zmienną środowiskową SERPAPI_KEY."}
+        )
+
     search_url = "https://serpapi.com/search"
     params = {
         "engine": "google",
@@ -24,8 +32,15 @@ def search(q: str = Query(..., min_length=2)):
         "api_key": SERPAPI_KEY
     }
 
-    response = requests.get(search_url, params=params)
-    data = response.json()
+    try:
+        response = requests.get(search_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Błąd podczas zapytania do SerpAPI: {str(e)}"}
+        )
 
     results = []
     for result in data.get("organic_results", []):
@@ -33,7 +48,9 @@ def search(q: str = Query(..., min_length=2)):
         snippet = result.get("snippet", "")
 
         try:
-            paste_text = requests.get(link, timeout=5).text
+            paste_response = requests.get(link, timeout=5)
+            paste_response.raise_for_status()
+            paste_text = paste_response.text
             match = re.search(r".{0,30}" + re.escape(q) + r".{0,30}", paste_text, re.IGNORECASE)
             if match:
                 results.append({
@@ -41,7 +58,14 @@ def search(q: str = Query(..., min_length=2)):
                     "snippet": match.group(),
                     "date": result.get("date", "unknown")
                 })
-        except:
+        except requests.RequestException:
             continue
 
-    return JSONResponse(content=sorted(results, key=lambda x: x["date"], reverse=True))
+   
+    sorted_results = sorted(
+        results,
+        key=lambda x: x.get("date", ""),
+        reverse=True
+    )
+
+    return JSONResponse(content=sorted_results)
