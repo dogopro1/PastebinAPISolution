@@ -8,6 +8,7 @@ app = FastAPI()
 
 
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+print("DEBUG: SERPAPI_KEY =", SERPAPI_KEY)
 
 @app.get("/")
 def root():
@@ -61,7 +62,6 @@ def search(q: str = Query(..., min_length=2)):
         except requests.RequestException:
             continue
 
-   
     sorted_results = sorted(
         results,
         key=lambda x: x.get("date", ""),
