@@ -22,7 +22,7 @@ def parse_date(date_str: str) -> datetime:
     try:
         return datetime.strptime(date_str, "%b %d, %Y")
     except:
-        return datetime.min  # Najstarsza możliwa data jako fallback
+        return datetime.min  # Fallback dla błędnych/nieznanych dat
 
 @app.get("/search")
 def search(q: str = Query(..., min_length=2)):
@@ -55,19 +55,12 @@ def search(q: str = Query(..., min_length=2)):
         snippet = result.get("snippet", "")
         date = result.get("date", "unknown")
 
-        try:
-            paste_response = requests.get(link, timeout=5)
-            paste_response.raise_for_status()
-            paste_text = paste_response.text
-            match = re.search(r".{0,30}" + re.escape(q) + r".{0,30}", paste_text, re.IGNORECASE)
-            if match:
-                results.append({
-                    "link": link,
-                    "snippet": match.group(),
-                    "date": date
-                })
-        except requests.RequestException:
-            continue
+        if q.lower() in snippet.lower():
+            results.append({
+                "link": link,
+                "snippet": snippet,
+                "date": date
+            })
 
     sorted_results = sorted(
         results,
